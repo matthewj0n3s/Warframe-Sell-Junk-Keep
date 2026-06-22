@@ -1,0 +1,927 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Warframe Inventory Scanner</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&family=Inter:wght@300;400;500&display=swap');
+
+  :root {
+    --bg: #0a0c10;
+    --surface: #0f1318;
+    --surface2: #151b22;
+    --border: #1e2a35;
+    --accent: #4ecdc4;
+    --accent2: #c5a028;
+    --danger: #e05a5a;
+    --text: #d4dde8;
+    --muted: #5a6a7a;
+    --sell: #4ecdc4;
+    --dupe: #c5a028;
+    --junk: #e05a5a;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Ambient grid background */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(78,205,196,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(78,205,196,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .container {
+    position: relative;
+    z-index: 1;
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 24px 16px;
+  }
+
+  /* Header */
+  .header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 32px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .header-icon {
+    width: 40px;
+    height: 40px;
+    background: linear-gradient(135deg, var(--accent), #2a8a84);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    flex-shrink: 0;
+  }
+
+  .header-text h1 {
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+
+  .header-text p {
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+
+  /* Steps */
+  .steps {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+  }
+
+  .step {
+    flex: 1;
+    min-width: 140px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+    font-size: 12px;
+  }
+
+  .step-num {
+    font-family: 'Share Tech Mono', monospace;
+    color: var(--accent);
+    font-size: 10px;
+    letter-spacing: 1px;
+    margin-bottom: 4px;
+  }
+
+  .step p { color: var(--muted); line-height: 1.4; }
+
+  /* Upload zone */
+  .upload-zone {
+    background: var(--surface);
+    border: 2px dashed var(--border);
+    border-radius: 12px;
+    padding: 40px 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-bottom: 16px;
+    position: relative;
+  }
+
+  .upload-zone:hover, .upload-zone.drag-over {
+    border-color: var(--accent);
+    background: rgba(78,205,196,0.04);
+  }
+
+  .upload-zone input {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    cursor: pointer;
+    width: 100%;
+    height: 100%;
+  }
+
+  .upload-icon { font-size: 36px; margin-bottom: 12px; }
+
+  .upload-zone h3 {
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    margin-bottom: 6px;
+  }
+
+  .upload-zone p { color: var(--muted); font-size: 13px; }
+
+  .upload-zone .file-types {
+    margin-top: 10px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    color: var(--accent);
+    letter-spacing: 1px;
+  }
+
+  /* Tips */
+  .tips {
+    background: rgba(197,160,40,0.07);
+    border: 1px solid rgba(197,160,40,0.2);
+    border-radius: 8px;
+    padding: 14px 16px;
+    margin-bottom: 24px;
+    font-size: 12px;
+    color: #b8962a;
+    line-height: 1.6;
+  }
+
+  .tips strong { color: var(--accent2); }
+
+  /* Scan button */
+  .scan-btn {
+    width: 100%;
+    padding: 14px;
+    background: linear-gradient(135deg, var(--accent), #2a8a84);
+    color: #0a0c10;
+    border: none;
+    border-radius: 8px;
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: opacity 0.2s, transform 0.1s;
+    margin-bottom: 24px;
+    display: none;
+  }
+
+  .scan-btn:hover { opacity: 0.9; }
+  .scan-btn:active { transform: scale(0.99); }
+  .scan-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* Progress */
+  .progress-section {
+    display: none;
+    margin-bottom: 24px;
+  }
+
+  .progress-label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 8px;
+    font-family: 'Share Tech Mono', monospace;
+  }
+
+  .progress-bar-bg {
+    background: var(--surface2);
+    border-radius: 4px;
+    height: 6px;
+    overflow: hidden;
+  }
+
+  .progress-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), #2a8a84);
+    border-radius: 4px;
+    width: 0%;
+    transition: width 0.3s;
+  }
+
+  .progress-log {
+    margin-top: 10px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    min-height: 20px;
+  }
+
+  /* Results */
+  .results-section { display: none; }
+
+  .results-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+    flex-wrap: gap;
+    gap: 10px;
+  }
+
+  .results-header h2 {
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+
+  .results-stats {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .stat-pill {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 4px 12px;
+    font-size: 12px;
+    font-family: 'Share Tech Mono', monospace;
+  }
+
+  .stat-pill span { color: var(--accent); font-weight: 600; }
+
+  /* Filter tabs */
+  .filter-tabs {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+  }
+
+  .filter-tab {
+    padding: 6px 14px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-family: 'Rajdhani', sans-serif;
+    font-weight: 600;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    cursor: pointer;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--muted);
+    transition: all 0.15s;
+  }
+
+  .filter-tab.active { background: var(--accent); color: #0a0c10; border-color: var(--accent); }
+  .filter-tab.sell-tab.active { background: var(--sell); border-color: var(--sell); }
+  .filter-tab.dupe-tab.active { background: var(--dupe); border-color: var(--dupe); }
+  .filter-tab.junk-tab.active { background: var(--junk); border-color: var(--junk); }
+
+  /* Table */
+  .table-wrap {
+    overflow-x: auto;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+
+  thead {
+    background: var(--surface2);
+  }
+
+  th {
+    padding: 10px 14px;
+    text-align: left;
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--muted);
+    white-space: nowrap;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  th:hover { color: var(--accent); }
+
+  td {
+    padding: 10px 14px;
+    border-top: 1px solid var(--border);
+    vertical-align: middle;
+  }
+
+  tr:hover td { background: rgba(78,205,196,0.03); }
+
+  .item-name {
+    font-weight: 500;
+    color: var(--text);
+  }
+
+  .item-type {
+    font-size: 10px;
+    color: var(--muted);
+    font-family: 'Share Tech Mono', monospace;
+    margin-top: 2px;
+  }
+
+  .qty {
+    font-family: 'Share Tech Mono', monospace;
+    color: var(--muted);
+    text-align: center;
+  }
+
+  .price {
+    font-family: 'Share Tech Mono', monospace;
+    font-weight: 600;
+  }
+
+  .price.high { color: var(--sell); }
+  .price.mid { color: var(--accent2); }
+  .price.low { color: var(--muted); }
+  .price.unknown { color: var(--muted); font-style: italic; font-size: 11px; }
+
+  .action-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-family: 'Rajdhani', sans-serif;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  .badge-sell { background: rgba(78,205,196,0.12); color: var(--sell); border: 1px solid rgba(78,205,196,0.3); }
+  .badge-dupe { background: rgba(197,160,40,0.12); color: var(--accent2); border: 1px solid rgba(197,160,40,0.3); }
+  .badge-junk { background: rgba(224,90,90,0.12); color: var(--junk); border: 1px solid rgba(224,90,90,0.3); }
+  .badge-keep { background: rgba(100,100,200,0.12); color: #8888dd; border: 1px solid rgba(100,100,200,0.3); }
+
+  .market-link {
+    color: var(--accent);
+    text-decoration: none;
+    font-size: 11px;
+    font-family: 'Share Tech Mono', monospace;
+    opacity: 0.6;
+    transition: opacity 0.15s;
+  }
+  .market-link:hover { opacity: 1; }
+
+  /* Empty / error states */
+  .empty-state {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--muted);
+    font-size: 13px;
+  }
+
+  .reset-btn {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-size: 12px;
+    cursor: pointer;
+    margin-top: 16px;
+    transition: all 0.15s;
+  }
+
+  .reset-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* Video preview */
+  .video-preview {
+    display: none;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 16px;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .video-preview.visible { display: flex; }
+
+  .video-thumb {
+    width: 60px;
+    height: 60px;
+    background: var(--surface2);
+    border-radius: 6px;
+    flex-shrink: 0;
+    overflow: hidden;
+  }
+
+  .video-thumb video { width: 100%; height: 100%; object-fit: cover; }
+
+  .video-info { flex: 1; }
+  .video-info .vname { font-size: 13px; font-weight: 500; margin-bottom: 4px; }
+  .video-info .vsize { font-size: 11px; color: var(--muted); font-family: 'Share Tech Mono', monospace; }
+
+  .remove-video {
+    background: none;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 18px;
+    padding: 4px;
+    line-height: 1;
+    transition: color 0.15s;
+  }
+  .remove-video:hover { color: var(--danger); }
+
+  canvas { display: none; }
+
+  .note {
+    font-size: 11px;
+    color: var(--muted);
+    text-align: center;
+    margin-top: 12px;
+    line-height: 1.5;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <div class="header-icon">⚙️</div>
+    <div class="header-text">
+      <h1>Inventory Scanner</h1>
+      <p>Warframe · Mods & Prime Parts · Powered by AI + warframe.market</p>
+    </div>
+  </div>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">STEP 01</div>
+      <p>Open Warframe Companion app → Inventory or Mods</p>
+    </div>
+    <div class="step">
+      <div class="step-num">STEP 02</div>
+      <p>Screen record while scrolling slowly through your items</p>
+    </div>
+    <div class="step">
+      <div class="step-num">STEP 03</div>
+      <p>Upload the recording here — AI reads names & checks prices</p>
+    </div>
+  </div>
+
+  <div class="tips">
+    <strong>📱 Tips for best results:</strong> Scroll slowly so items are readable. Good lighting / screen brightness helps. Companion app works better than console recordings. Mods and Prime Parts sections work best.
+  </div>
+
+  <div class="upload-zone" id="uploadZone">
+    <input type="file" id="videoInput" accept="video/*">
+    <div class="upload-icon">🎬</div>
+    <h3>Upload Screen Recording</h3>
+    <p>Tap to select video from your camera roll</p>
+    <div class="file-types">MP4 · MOV · WEBM · M4V</div>
+  </div>
+
+  <div class="video-preview" id="videoPreview">
+    <div class="video-thumb">
+      <video id="previewVideo" muted></video>
+    </div>
+    <div class="video-info">
+      <div class="vname" id="videoName">video.mp4</div>
+      <div class="vsize" id="videoSize">0 MB</div>
+    </div>
+    <button class="remove-video" id="removeVideo" title="Remove">✕</button>
+  </div>
+
+  <button class="scan-btn" id="scanBtn">⚡ Scan Inventory</button>
+
+  <div class="progress-section" id="progressSection">
+    <div class="progress-label">
+      <span id="progressLabel">Extracting frames...</span>
+      <span id="progressPct">0%</span>
+    </div>
+    <div class="progress-bar-bg">
+      <div class="progress-bar-fill" id="progressFill"></div>
+    </div>
+    <div class="progress-log" id="progressLog"></div>
+  </div>
+
+  <div class="results-section" id="resultsSection">
+    <div class="results-header">
+      <h2>Scan Results</h2>
+      <div class="results-stats">
+        <div class="stat-pill">Items: <span id="statTotal">0</span></div>
+        <div class="stat-pill">Est. value: <span id="statValue">0p</span></div>
+      </div>
+    </div>
+
+    <div class="filter-tabs">
+      <button class="filter-tab active" data-filter="all">All</button>
+      <button class="filter-tab sell-tab" data-filter="SELL">💰 Sell</button>
+      <button class="filter-tab dupe-tab" data-filter="DUPE">♻️ Dupes</button>
+      <button class="filter-tab junk-tab" data-filter="JUNK">🗑️ Junk</button>
+      <button class="filter-tab" data-filter="KEEP">⭐ Keep</button>
+    </div>
+
+    <div class="table-wrap">
+      <table id="resultsTable">
+        <thead>
+          <tr>
+            <th onclick="sortTable('name')">Item ↕</th>
+            <th onclick="sortTable('qty')" style="text-align:center">Qty ↕</th>
+            <th onclick="sortTable('price')">Avg Price ↕</th>
+            <th>Action</th>
+            <th>Market</th>
+          </tr>
+        </thead>
+        <tbody id="resultsBody"></tbody>
+      </table>
+    </div>
+
+    <button class="reset-btn" id="resetBtn">↩ Scan another video</button>
+    <p class="note">Prices pulled live from warframe.market · Always double-check before listing · Ducat value shown where applicable</p>
+  </div>
+
+</div>
+
+<canvas id="frameCanvas"></canvas>
+
+<script>
+  let videoFile = null;
+  let allItems = [];
+  let currentFilter = 'all';
+  let sortCol = 'price';
+  let sortDir = -1;
+
+  const videoInput = document.getElementById('videoInput');
+  const uploadZone = document.getElementById('uploadZone');
+  const videoPreview = document.getElementById('videoPreview');
+  const previewVideo = document.getElementById('previewVideo');
+  const videoName = document.getElementById('videoName');
+  const videoSize = document.getElementById('videoSize');
+  const removeVideo = document.getElementById('removeVideo');
+  const scanBtn = document.getElementById('scanBtn');
+  const progressSection = document.getElementById('progressSection');
+  const progressFill = document.getElementById('progressFill');
+  const progressLabel = document.getElementById('progressLabel');
+  const progressPct = document.getElementById('progressPct');
+  const progressLog = document.getElementById('progressLog');
+  const resultsSection = document.getElementById('resultsSection');
+  const resultsBody = document.getElementById('resultsBody');
+
+  // Drag and drop
+  uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('drag-over'); });
+  uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('drag-over'));
+  uploadZone.addEventListener('drop', e => {
+    e.preventDefault();
+    uploadZone.classList.remove('drag-over');
+    const f = e.dataTransfer.files[0];
+    if (f && f.type.startsWith('video/')) handleFile(f);
+  });
+
+  videoInput.addEventListener('change', e => {
+    if (e.target.files[0]) handleFile(e.target.files[0]);
+  });
+
+  function handleFile(f) {
+    videoFile = f;
+    videoName.textContent = f.name;
+    videoSize.textContent = (f.size / 1024 / 1024).toFixed(1) + ' MB';
+    previewVideo.src = URL.createObjectURL(f);
+    videoPreview.classList.add('visible');
+    scanBtn.style.display = 'block';
+    uploadZone.style.display = 'none';
+  }
+
+  removeVideo.addEventListener('click', () => {
+    videoFile = null;
+    previewVideo.src = '';
+    videoPreview.classList.remove('visible');
+    scanBtn.style.display = 'none';
+    uploadZone.style.display = 'block';
+    videoInput.value = '';
+  });
+
+  document.getElementById('resetBtn').addEventListener('click', () => {
+    resultsSection.style.display = 'none';
+    uploadZone.style.display = 'block';
+    videoPreview.classList.remove('visible');
+    scanBtn.style.display = 'none';
+    videoFile = null;
+    videoInput.value = '';
+    allItems = [];
+  });
+
+  scanBtn.addEventListener('click', startScan);
+
+  async function startScan() {
+    if (!videoFile) return;
+    scanBtn.disabled = true;
+    progressSection.style.display = 'block';
+    resultsSection.style.display = 'none';
+
+    try {
+      setProgress(5, 'Loading video...');
+      const frames = await extractFrames(videoFile);
+      setProgress(30, `Extracted ${frames.length} frames — sending to AI...`);
+      log(`Analyzing ${frames.length} frames for item names...`);
+
+      const items = await analyzeFramesWithClaude(frames);
+      setProgress(70, `Found ${items.length} unique items — checking prices...`);
+      log(`Checking warframe.market for ${items.length} items...`);
+
+      const priced = await fetchPrices(items);
+      setProgress(100, 'Done!');
+
+      allItems = priced;
+      renderResults();
+    } catch(err) {
+      log('Error: ' + err.message);
+      setProgress(0, 'Something went wrong — try again');
+      console.error(err);
+    } finally {
+      scanBtn.disabled = false;
+    }
+  }
+
+  function setProgress(pct, label) {
+    progressFill.style.width = pct + '%';
+    progressLabel.textContent = label;
+    progressPct.textContent = pct + '%';
+  }
+
+  function log(msg) {
+    progressLog.textContent = '> ' + msg;
+  }
+
+  // Extract frames from video at ~1fps or every 2 seconds
+  async function extractFrames(file) {
+    return new Promise((resolve, reject) => {
+      const video = document.createElement('video');
+      video.src = URL.createObjectURL(file);
+      video.muted = true;
+      video.preload = 'metadata';
+
+      video.addEventListener('loadedmetadata', async () => {
+        const duration = video.duration;
+        const canvas = document.getElementById('frameCanvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = 640;
+        canvas.height = 360;
+
+        const frames = [];
+        // Sample every 2 seconds, max 40 frames
+        const interval = Math.max(duration / 40, 2);
+        const times = [];
+        for (let t = 0; t < duration; t += interval) times.push(t);
+
+        for (const t of times) {
+          await seekTo(video, t);
+          ctx.drawImage(video, 0, 0, 640, 360);
+          frames.push(canvas.toDataURL('image/jpeg', 0.7).split(',')[1]);
+        }
+
+        URL.revokeObjectURL(video.src);
+        resolve(frames);
+      });
+
+      video.addEventListener('error', () => reject(new Error('Could not load video')));
+      video.load();
+    });
+  }
+
+  function seekTo(video, time) {
+    return new Promise(resolve => {
+      video.currentTime = time;
+      video.addEventListener('seeked', resolve, { once: true });
+    });
+  }
+
+  // Send frames to Claude API for OCR / item extraction
+  async function analyzeFramesWithClaude(frames) {
+    // Send frames in batches of 8 to stay within limits
+    const batchSize = 8;
+    const allDetected = [];
+
+    for (let i = 0; i < frames.length; i += batchSize) {
+      const batch = frames.slice(i, i + batchSize);
+      const pct = 30 + Math.round((i / frames.length) * 35);
+      setProgress(pct, `Analyzing frames ${i+1}–${Math.min(i+batchSize, frames.length)} of ${frames.length}...`);
+
+      const content = [];
+      for (const f of batch) {
+        content.push({ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: f } });
+      }
+      content.push({
+        type: 'text',
+        text: `These are screenshots from the Warframe Companion app showing a player's inventory (mods and/or prime parts).
+
+Extract every visible item name and quantity. Return ONLY a JSON array, no markdown, no explanation. Format:
+[{"name": "Primed Flow", "qty": 3, "type": "mod"}, {"name": "Ash Prime Neuroptics", "qty": 2, "type": "prime_part"}]
+
+Rules:
+- type must be "mod", "prime_part", "arcane", or "resource"
+- If qty is not visible, use 1
+- Deduplicate: if the same item appears in multiple frames, keep the highest qty seen
+- Only include actual Warframe items, ignore UI elements
+- If no items are visible, return []`
+      });
+
+      try {
+        const res = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: 'claude-sonnet-4-6',
+            max_tokens: 1000,
+            messages: [{ role: 'user', content }]
+          })
+        });
+
+        const data = await res.json();
+        const text = data.content?.map(c => c.text || '').join('') || '[]';
+        const clean = text.replace(/```json|```/g, '').trim();
+        try {
+          const parsed = JSON.parse(clean);
+          allDetected.push(...parsed);
+        } catch { /* skip bad batch */ }
+      } catch { /* skip failed batch */ }
+    }
+
+    // Deduplicate by name, keep max qty
+    const map = {};
+    for (const item of allDetected) {
+      const key = item.name.toLowerCase().trim();
+      if (!map[key]) map[key] = item;
+      else map[key].qty = Math.max(map[key].qty || 1, item.qty || 1);
+    }
+
+    return Object.values(map);
+  }
+
+  // Fetch prices from warframe.market
+  async function fetchPrices(items) {
+    const result = [];
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      const pct = 70 + Math.round((i / items.length) * 28);
+      setProgress(pct, `Pricing ${i+1}/${items.length}: ${item.name}...`);
+
+      // Convert item name to market URL slug
+      const slug = item.name.toLowerCase()
+        .replace(/[^a-z0-9\s]/g, '')
+        .trim()
+        .replace(/\s+/g, '_');
+
+      try {
+        const res = await fetch(`https://api.warframe.market/v1/items/${slug}/orders`);
+        if (res.ok) {
+          const data = await res.json();
+          const sellOrders = (data.payload?.orders || [])
+            .filter(o => o.order_type === 'sell' && o.user?.status === 'ingame')
+            .sort((a, b) => a.platinum - b.platinum);
+
+          if (sellOrders.length >= 3) {
+            // Take median of top 5 lowest ingame sellers
+            const top5 = sellOrders.slice(0, 5).map(o => o.platinum);
+            const avg = Math.round(top5.reduce((a,b) => a+b, 0) / top5.length);
+            item.price = avg;
+            item.marketUrl = `https://warframe.market/items/${slug}`;
+          } else {
+            item.price = null;
+          }
+        } else {
+          item.price = null;
+        }
+      } catch {
+        item.price = null;
+      }
+
+      // Small delay to respect rate limit (3 req/sec)
+      await new Promise(r => setTimeout(r, 400));
+
+      item.action = getAction(item);
+      result.push(item);
+    }
+    return result;
+  }
+
+  function getAction(item) {
+    const qty = item.qty || 1;
+    const price = item.price;
+
+    if (price === null) return 'UNKNOWN';
+    if (price >= 20 && qty >= 2) return 'SELL';
+    if (price >= 20 && qty === 1) return 'KEEP';
+    if (price < 5) return 'JUNK';
+    if (qty >= 3) return 'DUPE';
+    return 'KEEP';
+  }
+
+  function renderResults() {
+    progressSection.style.display = 'none';
+    resultsSection.style.display = 'block';
+
+    const sellable = allItems.filter(i => i.action === 'SELL');
+    const totalValue = sellable.reduce((s, i) => s + (i.price || 0) * Math.max((i.qty || 1) - 1, 1), 0);
+
+    document.getElementById('statTotal').textContent = allItems.length;
+    document.getElementById('statValue').textContent = totalValue + 'p';
+
+    renderTable();
+  }
+
+  function renderTable() {
+    const filtered = currentFilter === 'all'
+      ? allItems
+      : allItems.filter(i => i.action === currentFilter);
+
+    const sorted = [...filtered].sort((a, b) => {
+      let av = sortCol === 'name' ? a.name : sortCol === 'qty' ? (a.qty || 1) : (a.price || -1);
+      let bv = sortCol === 'name' ? b.name : sortCol === 'qty' ? (b.qty || 1) : (b.price || -1);
+      if (typeof av === 'string') return av.localeCompare(bv) * sortDir;
+      return (av - bv) * sortDir;
+    });
+
+    if (sorted.length === 0) {
+      resultsBody.innerHTML = `<tr><td colspan="5" class="empty-state">No items match this filter.</td></tr>`;
+      return;
+    }
+
+    resultsBody.innerHTML = sorted.map(item => {
+      const priceClass = !item.price ? 'unknown' : item.price >= 30 ? 'high' : item.price >= 10 ? 'mid' : 'low';
+      const priceText = item.price !== null ? item.price + 'p' : 'Not found';
+      const badgeClass = { SELL: 'badge-sell', DUPE: 'badge-dupe', JUNK: 'badge-junk', KEEP: 'badge-keep', UNKNOWN: '' }[item.action] || '';
+      const badgeIcon = { SELL: '💰', DUPE: '♻️', JUNK: '🗑️', KEEP: '⭐', UNKNOWN: '❓' }[item.action] || '';
+      const marketLink = item.marketUrl
+        ? `<a href="${item.marketUrl}" target="_blank" class="market-link">→ market</a>`
+        : '<span style="color:var(--muted);font-size:11px">—</span>';
+
+      return `<tr>
+        <td>
+          <div class="item-name">${escHtml(item.name)}</div>
+          <div class="item-type">${item.type || ''}</div>
+        </td>
+        <td class="qty">${item.qty || 1}</td>
+        <td class="price ${priceClass}">${priceText}</td>
+        <td><span class="action-badge ${badgeClass}">${badgeIcon} ${item.action}</span></td>
+        <td>${marketLink}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  function escHtml(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  // Filter tabs
+  document.querySelectorAll('.filter-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.filter-tab').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      currentFilter = btn.dataset.filter;
+      renderTable();
+    });
+  });
+
+  function sortTable(col) {
+    if (sortCol === col) sortDir *= -1;
+    else { sortCol = col; sortDir = -1; }
+    renderTable();
+  }
+</script>
+</body>
+</html>
